@@ -5,12 +5,6 @@ class Camera
 	def initialize(mac, serial, networkId, model, claimedAt, publicIP, name)
 		# this should only get called after the parameters from the organization inventory API call are retrieved
 		@mac, @serial, @networkId, @model, @claimedAt, @publicIP, @name = mac, serial, networkId, model, claimedAt, publicIP, name
-		@url720p = ""
-		@url1080p = ""
-	end
-
-	def getVideoUrl()
-		@m3u8Url
 	end
 
 

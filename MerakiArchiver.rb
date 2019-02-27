@@ -11,9 +11,11 @@ require 'json'
 require 'logger'
 require 'csv'
 require 'date'
+require 'thread'
 
 require_relative 'Camera'
 require_relative 'FFmpegWorker'
+require_relative 'MultiLogger'
 
 SUPPORT_720P = ["MV21", "MV71"]		# also, these are the gen 1 models
 SUPPORT_1080P = ["MV22", "MV72", "MV12"]		# these are the gen 2 models
@@ -33,12 +35,8 @@ END {
 }
 
 def readSingleLineFile(file)
-	if File.exist?(file)
-		File.read(file)
-	else
-		puts "Could not find file #{file}"
-		exit
-	end
+	if !File.exist?(file) then return false end		# return false if file cannot be found
+	File.read(file)
 end
 
 def readNewListFile(file)
@@ -108,29 +106,33 @@ def runAPICall(url, header)
 	return JSON.parse(response.body, symbolize_names: true)	# convert response body to JSON for easier parsing
 end
 
-def checkCameraReachable(cameraObj)
+def checkCameraReachable(cameraObj, logger)
 	# check if camera is reachable on the LAN
 	# mark the camera as not reachable locally only if TCP:443 fails
 	unless cameraObj.class == Camera
-		puts "checkCameraReachable got a #{cameraObj.class} object, expecting Camera"
+		logger.write("checkCameraReachable got a #{cameraObj.class} object, expecting Camera", "debug", false)
 		return nil
 	end
 
 
-	puts "Attempting to reach #{cameraObj.name} (#{cameraObj.serial}) at #{cameraObj.lanIp} ..."
+	logger.write("Attempting to reach #{cameraObj.name} (#{cameraObj.serial}) at #{cameraObj.lanIp} ...", "info", true)
 	# `ping #{cameraObj.lanIp} -c 2`
 	# unless $?.success?
 	# 	puts "\tFailed PING"
 	# 	cameraObj.isReachable = false
 	# end
 
-	`curl --connect-timeout 2 --silent #{cameraObj.lanIp}:443`		# this should return an empty reply
+	curlCmd = "curl --connect-timeout 2 --silent #{cameraObj.lanIp}:443"
+	logger.write("curlCmd: #{curlCmd}", "debug", true)
+	`#{curlCmd}`		# this should return an empty reply
+	logger.write("#{$?.inspect}", "debug", false)
+
 	if $?.exitstatus == 52
-		puts "\tSuccess TCP:443, camera reachable"
+		logger.write("Success TCP:443, camera reachable", "info", true)
 		cameraObj.isReachable = true
 		return true
 	else
-		puts "\tFailed TCP:443"
+		logger.write("Failed TCP:443, camera unreachable", "info", true)
 		cameraObj.isReachable = false
 		return false
 	end
@@ -151,10 +153,11 @@ end
 
 def writeCameraKeys(file, inValues)
 	unless inValues.class == Hash
-		puts "writeCameraKeys received unexpected object #{inValues.class}"
+		multiLogger.write("writeCameraKeys received unexpected object #{inValues.class}", "debug", true)
 		return false
 	end
 
+	# TODO: check whether file is opened successfully
 	File.open(file, "w") { |f|
 		f << "# serial,key"		# header
 		(0...inValues.keys.size).each do |i|
@@ -182,45 +185,65 @@ end
 
 
 
+
+
 # basic variables
-merakiAPIKey = readSingleLineFile("apikey")   # key for API calls
 cameraKeysFile = "cameraKeys"
 newListFile = "new_list"
-baseVideoDir = "."	# directory where video files will be stored and folders for the cameras will be created
+baseVideoDir = "./"	# directory where video files will be stored and folders for the cameras will be created
+baseLogFileDir = "./"	# directory where log files created by Logger will be stored
+merakiAPIKey = readSingleLineFile("apikey")   # key for API calls
 orgId = ARGV[0].to_i    # ID of the organization to look cameras in
 baseBody = {}
 baseHeaders = {"Content-Type" => "application/json",
             "X-Cisco-Meraki-API-Key" => merakiAPIKey}
 
 
+# create Logger object and start logging things
+loggerObj = Logger.new(baseLogFileDir + "MerakiArchiver.log", 10, 1*1024*1024)
+loggerObj.level = Logger::DEBUG
+multiLogger = MultiLogger.new(loggerObj)
+multiLogger.write("Logger has started", "info", true)
+
+
+# TODO: read input arguments and apply them
+multiLogger.write("Reading input arguments ...", "debug", true)
+unless merakiAPIKey
+	multiLogger.write("Could not read API key", "fatal", true)
+	exit
+end
+
+
 
 puts "API Key: #{'*' * 35}" + merakiAPIKey[-6,5]		# show a portion of the API key
+multiLogger.write("API Key: #{merakiAPIKey}", "debug", false)
 
 
 
 # get the list of all the cameras in this organization and store information about them
-puts "Getting list of cameras in the organization ..."
+multiLogger.write("Getting list of cameras in the organization ...", "info", true)
 tmpList = getCamerasInOrg(orgId, baseHeaders)
 if tmpList == nil
-	puts "Could not retrieve cameras in organization inventory"
+	multiLogger.write("Could not retrieve cameras in organization inventory", "fatal", true)
+	exit
 elsif tmpList.empty?
-	puts "Organization inventory does not have cameras"
+	multiLogger.write("Organization inventory does not have cameras", "fatal", true)
 	exit
 end
 
 # put the cameras in a list of Camera objects
-puts "Found #{tmpList.size} cameras in organization #{orgId}"
+multiLogger.write("Found #{tmpList.size} cameras in organization #{orgId}", "info", true)
 cameraList = Array.new
 (0...tmpList.size).each do |i|
-	cameraList << Camera.new(tmpList[i][:mac], tmpList[i][:serial], tmpList[i][:networkId], tmpList[i][:model],
-														tmpList[i][:claimedAt], tmpList[i][:publicIp], tmpList[i][:name])
+	cameraList << Camera.new(tmpList[i][:mac], tmpList[i][:serial], tmpList[i][:networkId], tmpList[i][:model], tmpList[i][:claimedAt], tmpList[i][:publicIp], tmpList[i][:name])
+	multiLogger.write("#{cameraList[i].inspect}", "debug", false)
 end
 # pp cameraList
 
 
 
 # do camera API calls to get more information, like their LAN IP and videoLink
-puts "Collecting more information about the cameras ..."
+multiLogger.write("Collecting more information about the cameras ...", "info", true)
 (0...cameraList.size).each do |i|
 	output = getDevice(cameraList[i], baseHeaders)
 	cameraList[i].lat = output[:lat]
@@ -232,6 +255,8 @@ puts "Collecting more information about the cameras ..."
 
 	cameraList[i].apiVideoLink = getCameraLink(cameraList[i], baseHeaders)
 	cameraList[i].node_id = cameraList[i].apiVideoLink[/\d{5,}/]	# node_id is 5+ digits
+
+	multiLogger.write("#{cameraList[i].inspect}", "debug", false)
 end
 puts "\n\n"
 
@@ -239,19 +264,20 @@ puts "\n\n"
 
 # check if the cameras are reachable locally
 # attempt to ping them and open a TCP:443 connection to their LAN IP
-puts "Checking if cameras are reachable ..."
+multiLogger.write("Checking if cameras are reachable ...", "info", true)
 camReachable = 0
 camUnreachable = 0
 (0...cameraList.size).each do |i|
 	# do it like this so we can show how many cameras are reachable/unreachable
-	if checkCameraReachable(cameraList[i]) then camReachable += 1 else camUnreachable += 1 end
+	if checkCameraReachable(cameraList[i], multiLogger) then camReachable += 1 else camUnreachable += 1 end
 	puts "\n"
 end
-puts "Cameras reachable locally: #{camReachable}"
-puts "Cameras not reachable locally: #{camUnreachable}"
+
+multiLogger.write("Cameras reachable locally: #{camReachable}", "info", true)
+multiLogger.write("Cameras not reachable locally: #{camUnreachable}", "info", true)
 
 if camReachable == 0	# if no cameras are reachable locally, exit
-	puts "I cannot reach any cameras locally :(, exiting..."
+	multiLogger.write("I cannot reach any cameras locally :(, exiting...", "fatal", true)
 	exit
 end
 puts "\n\n"
@@ -259,7 +285,7 @@ puts "\n\n"
 
 
 # process the new_list file and grab the key for the cameras to store in cameraKeys
-puts "Processing new_list file ..."
+multiLogger.write("Processing new_list file ...", "info", true)
 video_channels = readNewListFile(newListFile)
 
 # assign cameraKey to each Camera object, they are the value of m3u8_filename key
@@ -273,16 +299,19 @@ if video_channels
 			if video_channels[j][:node_id] == cameraList[i].node_id
 				cameraList[i].cameraKey = video_channels[j][:m3u8_filename]
 				wKeys[cameraList[i].serial] = cameraList[i].cameraKey
+				multiLogger.write("#{cameraList[i].serial} - #{cameraList[i].cameraKey}", "debug", true)
 				next
 			end
 		end
+
+		multiLogger.write("#{cameraList[i].inspect}", "debug", true)	# not as pretty as pp
 	end
 
 	# write the values obtained to the cameraKeys file, for caching
-	pp cameraList
+	# pp cameraList
 	writeCameraKeys(cameraKeysFile, wKeys)
 else
-	puts "Could not find new_list file #{newListFile}"
+	multiLogger.write("Could not find new_list file #{newListFile}", "error", true)
 end
 
 
@@ -290,10 +319,10 @@ end
 # start building the m3u8 url, cameras that do 1080p streams, will have "high" keywords
 # https://<camera-IP>.<cameramac>.devices.meraki.direct/hls/<high>/<high><cameraKey>.m3u8
 # read <cameraKey> from the file of cameraKeys collected previously
-puts "Reading cameraKeys file: #{cameraKeysFile}"
+multiLogger.write("Reading cameraKeys file: #{cameraKeysFile}", "info", true)
 cameraKeys = readCameraKeys(cameraKeysFile)
 if (cameraKeys == false)
-	puts "Could not read cameraKeys, exiting ..."
+	multiLogger.write("Could not read cameraKeys, exiting ...", "fatal", true)
 	exit
 end
 pp cameraKeys
@@ -303,14 +332,14 @@ pp cameraKeys
 # build the URL and set it to the appropriate Camera object
 (0...cameraList.size).each do |i|
 	cameraList[i].m3u8Url = buildM3U8Url(cameraList[i])
-	pp cameraList[i].getVideoUrl
+	pp cameraList[i].m3u8Url
 end
 puts "\n\n"
 
 
 
 # create directories to store video
-puts "Creating directories to store video files ..."
+multiLogger.write("Creating directories to store video files ...", "info", true)
 unless (Dir.exist?(baseVideoDir))
 	Dir.mkdir(baseVideoDir)
 end
@@ -322,13 +351,13 @@ end
 
 	# call the directories something like <camera-name>_<camera_serial>
 	# remove any - or spaces from the directory name
-	tmpDir = baseVideoDir + "/#{cameraList[i].name.gsub(' ', '_')}_#{cameraList[i].serial.gsub('-', '')}"
+	tmpDir = baseVideoDir + "#{cameraList[i].name.gsub(' ', '_')}_#{cameraList[i].serial.gsub('-', '')}"
 	cameraList[i].videoDir = tmpDir
 	if (Dir.exist?(tmpDir))
-		puts "Directory already exists, #{tmpDir}"
+		multiLogger.write("Directory already exists, #{tmpDir}", "info", true)
 		next
 	else
-		puts "Creating directory #{tmpDir}"
+		multiLogger.write("Creating directory #{tmpDir}", "info", true)
 		Dir.mkdir(tmpDir)
 	end
 end
@@ -336,9 +365,25 @@ puts "\n\n"
 
 
 
-# run the ffmpeg process
-# ffmpeg -i "<url>" -bsf:a aac_adtstoasc -vcodec copy -c copy -crf 50 <location.mp4>
-ffmpegTest = FFmpegWorker.new(cameraList[0])
-ffmpegTest.maxVideoLength = 60
-ffmpegTest.videoOverlap = 10
-ffmpegTest.run
+# run the ffmpeg workers in separate threads
+# if the camera is reachable, run the thread
+ffmpegWorkerArray = Array.new
+threadArray = Array.new
+(0...cameraList.size).each do |i|
+
+	if (cameraList[i].isReachable)
+		ffmpegTmp = FFmpegWorker.new(cameraList[i], multiLogger)
+		ffmpegTmp.maxVideoLength = 60
+		ffmpegTmp.videoOverlap = 10
+		ffmpegWorkerArray << ffmpegTmp
+
+		threadArray << Thread.new(i) do |i|
+			ffmpegWorkerArray[i].run
+		end
+	end
+end
+
+multiLogger.write("Starting #{threadArray.size} threads...", "info", true)
+threadArray.each {|t| t.join}
+
+multiLogger.close
