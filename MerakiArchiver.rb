@@ -1,9 +1,21 @@
 #!/usr/bin/ruby
-#
+# input arguments:
+# 	--orgID <id>: ID of the Meraki Dashboard organization where the cameras are
+# 	--apiKeyFile <file>: single-line file containing the API key for Meraki dashboard
+# 	--cameraKeysFile <file>: file containing keys for cameras
+# 	--newListFile <file>: file obtained from the Camera > Cameras page
+# 	--videoOutputDir <directory>: directory where video files will be stored
+# 	--maxVideoLength <seconds>: maximum length of .mp4 video file
+# 	--videoOverlap <seconds>: how early the next ffmpeg will be started before the end of the previous
+# TODO: add the following features
+# 	--maxVideosPerCamera <n>: maximum number of videos kept per camera
+
+
 # NOTES:
 # 	- cameras are only reached locally
 # 	- all cameras need to be in the same organization and network
 #   - only tested while cameras are connected with a cable, not on the WiFi
+
 
 require 'pp'
 require 'httparty'
@@ -24,15 +36,28 @@ SUPPORT_1080P = ["MV22", "MV72", "MV12"]		# these are the gen 2 models
 BEGIN {
   puts "MerakiArchiver is starting..."
 	if ARGV.size < 1
-		puts "Usage: ./MerakiArchiver.rb <orgID>"
+		puts "Not enough input arguments, need at least --orgID <id>"
 		exit
   end
 }
 
 END {
   puts "\n\nMerakiArchiver is ending..."
-
 }
+
+def readInputArguments(args)
+	# input will be ARGV, return hash with input arguments
+	outHash = {}
+	args.each_index { |i|
+		if (args[i][0,2] != "--")
+			next
+		else
+			outHash[args[i]] = args[i+1]
+		end
+	}
+
+	return outHash
+end
 
 def readSingleLineFile(file)
 	if !File.exist?(file) then return false end		# return false if file cannot be found
@@ -56,10 +81,10 @@ def readNewListFile(file)
 	return JSON.parse(outStr, symbolize_names: true)	# convert response body to JSON for easier parsing
 end
 
-def getCamerasInOrg(orgId, header)
+def getCamerasInOrg(orgID, header)
   # run API call to retrieve organization inventory
 	# return array of hashes containing info about the cameras in the organization
-  url = "https://api.meraki.com/api/v0/organizations/#{orgId.to_s}/inventory"
+  url = "https://api.meraki.com/api/v0/organizations/#{orgID.to_s}/inventory"
   regexpExpr = /MV\d{1,3}[Ww]{0,1}/		# this should match any camera model
   output = Array.new
 
@@ -185,44 +210,56 @@ end
 
 
 
-
-
 # basic variables
-cameraKeysFile = "cameraKeys"
-newListFile = "new_list"
-baseVideoDir = "./"	# directory where video files will be stored and folders for the cameras will be created
-baseLogFileDir = "./"	# directory where log files created by Logger will be stored
-merakiAPIKey = readSingleLineFile("apikey")   # key for API calls
-orgId = ARGV[0].to_i    # ID of the organization to look cameras in
-baseBody = {}
-baseHeaders = {"Content-Type" => "application/json",
-            "X-Cisco-Meraki-API-Key" => merakiAPIKey}
+# cameraKeysFile = "cameraKeys"
+# newListFile = "new_list"
+# videoOutputDir = "./"	# directory where video files will be stored and folders for the cameras will be created
+# orgID = 0    # ID of the organization to look cameras in
+
 
 
 # create Logger object and start logging things
+baseLogFileDir = "./"	# directory where log files created by Logger will be stored
 loggerObj = Logger.new(baseLogFileDir + "MerakiArchiver.log", 10, 1*1024*1024)
 loggerObj.level = Logger::DEBUG
 multiLogger = MultiLogger.new(loggerObj)
 multiLogger.write("Logger has started", "info", true)
 
 
-# TODO: read input arguments and apply them
-multiLogger.write("Reading input arguments ...", "debug", true)
-unless merakiAPIKey
+# read input arguments and store them to the appropriate variables
+multiLogger.write("Reading input arguments ...", "info", true)
+argsHash = readInputArguments(ARGV)
+multiLogger.write("#{argsHash.inspect}", "debug", true)
+
+orgID = argsHash["--orgID"]
+merakiAPIKey = readSingleLineFile(argsHash["--apiKeyFile"])   # key for API calls
+videoOutputDir = argsHash["--videoOutputDir"]
+maxVideoLength = argsHash["--maxVideoLength"].to_i
+videoOverlap = argsHash["--videoOverlap"].to_i
+cameraKeysFile = argsHash["--cameraKeysFile"]
+unless cameraKeysFile
+	# if a cameraKeysFile is given, ignore the newListFile
+	cameraKeysFile = "cameraKeys"		# assign default value
+	newListFile = argsHash["--newListFile"]
+end
+
+baseBody = {}
+baseHeaders = {"Content-Type" => "application/json",
+            "X-Cisco-Meraki-API-Key" => merakiAPIKey}
+
+unless merakiAPIKey		# check if API key was found
 	multiLogger.write("Could not read API key", "fatal", true)
 	exit
 end
-
-
-
 puts "API Key: #{'*' * 35}" + merakiAPIKey[-6,5]		# show a portion of the API key
-multiLogger.write("API Key: #{merakiAPIKey}", "debug", false)
+multiLogger.write("API Key: #{'*' * 35}#{merakiAPIKey[-6,5]}", "debug", false)	# hide it
+
 
 
 
 # get the list of all the cameras in this organization and store information about them
 multiLogger.write("Getting list of cameras in the organization ...", "info", true)
-tmpList = getCamerasInOrg(orgId, baseHeaders)
+tmpList = getCamerasInOrg(orgID, baseHeaders)
 if tmpList == nil
 	multiLogger.write("Could not retrieve cameras in organization inventory", "fatal", true)
 	exit
@@ -232,7 +269,7 @@ elsif tmpList.empty?
 end
 
 # put the cameras in a list of Camera objects
-multiLogger.write("Found #{tmpList.size} cameras in organization #{orgId}", "info", true)
+multiLogger.write("Found #{tmpList.size} cameras in organization #{orgID}", "info", true)
 cameraList = Array.new
 (0...tmpList.size).each do |i|
 	cameraList << Camera.new(tmpList[i][:mac], tmpList[i][:serial], tmpList[i][:networkId], tmpList[i][:model], tmpList[i][:claimedAt], tmpList[i][:publicIp], tmpList[i][:name])
@@ -284,7 +321,7 @@ puts "\n\n"
 
 
 
-# process the new_list file and grab the key for the cameras to store in cameraKeys
+# process the new_list file
 multiLogger.write("Processing new_list file ...", "info", true)
 video_channels = readNewListFile(newListFile)
 
@@ -304,7 +341,7 @@ if video_channels
 			end
 		end
 
-		multiLogger.write("#{cameraList[i].inspect}", "debug", true)	# not as pretty as pp
+		multiLogger.write("#{cameraList[i].inspect}", "debug", false)	# not as pretty as pp
 	end
 
 	# write the values obtained to the cameraKeys file, for caching
@@ -340,8 +377,8 @@ puts "\n\n"
 
 # create directories to store video
 multiLogger.write("Creating directories to store video files ...", "info", true)
-unless (Dir.exist?(baseVideoDir))
-	Dir.mkdir(baseVideoDir)
+unless (Dir.exist?(videoOutputDir))
+	Dir.mkdir(videoOutputDir)
 end
 
 (0...cameraList.size).each do |i|
@@ -351,7 +388,7 @@ end
 
 	# call the directories something like <camera-name>_<camera_serial>
 	# remove any - or spaces from the directory name
-	tmpDir = baseVideoDir + "#{cameraList[i].name.gsub(' ', '_')}_#{cameraList[i].serial.gsub('-', '')}"
+	tmpDir = videoOutputDir + "#{cameraList[i].name.gsub(' ', '_')}_#{cameraList[i].serial.gsub('-', '')}"
 	cameraList[i].videoDir = tmpDir
 	if (Dir.exist?(tmpDir))
 		multiLogger.write("Directory already exists, #{tmpDir}", "info", true)
@@ -373,8 +410,8 @@ threadArray = Array.new
 
 	if (cameraList[i].isReachable)
 		ffmpegTmp = FFmpegWorker.new(cameraList[i], multiLogger)
-		ffmpegTmp.maxVideoLength = 60
-		ffmpegTmp.videoOverlap = 10
+		ffmpegTmp.maxVideoLength = maxVideoLength
+		ffmpegTmp.videoOverlap = videoOverlap
 		ffmpegWorkerArray << ffmpegTmp
 
 		threadArray << Thread.new(i) do |i|
