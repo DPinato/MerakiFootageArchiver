@@ -13,8 +13,11 @@ This is effectively an ffmpeg wrapper, allowing to store locally video from Cisc
 - A separate directory is created for each camera. The length of each video file can be configured as well as how long before the end of the previous recording, the next recording will start, to avoid the chance of not capturing video for a period of time.
 
 
-## Limitations
-- All the cameras being monitored have to be within the same dashboard organization
+## Limitations / Notes
+- All the cameras, from which footage will be recorded, have to be within the same dashboard organization
+- The cameras are only reached on the local LAN, not through the cloud
+- Preferrably, the cameras will be connected via Ethernet cable, not via WiFi
+
 
 
 ## Examples
