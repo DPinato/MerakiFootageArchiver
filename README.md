@@ -19,4 +19,4 @@ This is effectively an ffmpeg wrapper, allowing to store locally video from Cisc
 
 ## Examples
 
-Usage: ./MerakiArchiver.rb \<orgID\>
+./MerakiArchiver.rb \<orgID\>
