@@ -3,18 +3,17 @@
 # 	--orgID <id>: ID of the Meraki Dashboard organization where the cameras are
 # 	--apiKeyFile <file>: single-line file containing the API key for Meraki dashboard
 # 	--cameraKeysFile <file>: file containing keys for cameras
-# 	--newListFile <file>: file obtained from the Camera > Cameras page
+# 	--camNewListFile <file>: file obtained from the Camera > Cameras page
 # 	--videoOutputDir <directory>: directory where video files will be stored
 # 	--maxVideoLength <seconds>: maximum length of .mp4 video file
 # 	--videoOverlap <seconds>: how early the next ffmpeg will be started before the end of the previous
-# TODO: add the following features
 # 	--maxVideosPerCamera <n>: maximum number of videos kept per camera
 
 
 # NOTES:
-# 	- cameras are only reached locally
-# 	- all cameras need to be in the same organization and network
-#   - only tested while cameras are connected with a cable, not on the WiFi
+# 	- cameras are only reached locally, not through cloud streaming
+# 	- all cameras need to be in the same organization
+#   - the camera will preferrably be connected via cable, not via WiFi, although it should not matter
 
 
 require 'pp'
@@ -31,6 +30,7 @@ require_relative 'MultiLogger'
 
 SUPPORT_720P = ["MV21", "MV71"]		# also, these are the gen 1 models
 SUPPORT_1080P = ["MV22", "MV72", "MV12"]		# these are the gen 2 models
+MANPAGE = "docs/manpage.txt"		# manual page for this
 
 
 BEGIN {
@@ -64,7 +64,7 @@ def readSingleLineFile(file)
 	File.read(file)
 end
 
-def readNewListFile(file)
+def readcamNewListFile(file)
 	# find "flux.actions.cameras.video_channels.reset" in the file given
 	# return the JSON array flux.actions.cameras.video_channels.reset
 	if !File.exist?(file) then return false end		# return false if file cannot be found
@@ -212,7 +212,7 @@ end
 
 # basic variables
 # cameraKeysFile = "cameraKeys"
-# newListFile = "new_list"
+# camNewListFile = "new_list"
 # videoOutputDir = "./"	# directory where video files will be stored and folders for the cameras will be created
 # orgID = 0    # ID of the organization to look cameras in
 
@@ -237,17 +237,19 @@ videoOutputDir = argsHash["--videoOutputDir"]
 maxVideoLength = argsHash["--maxVideoLength"].to_i
 videoOverlap = argsHash["--videoOverlap"].to_i
 cameraKeysFile = argsHash["--cameraKeysFile"]
+maxVideosPerCamera = argsHash["--maxVideosPerCamera"].to_i
+
+# if a cameraKeysFile is given, ignore the camNewListFile
 unless cameraKeysFile
-	# if a cameraKeysFile is given, ignore the newListFile
 	cameraKeysFile = "cameraKeys"		# assign default value
-	newListFile = argsHash["--newListFile"]
+	camNewListFile = argsHash["--camNewListFile"]
 end
 
 baseBody = {}
 baseHeaders = {"Content-Type" => "application/json",
             "X-Cisco-Meraki-API-Key" => merakiAPIKey}
 
-unless merakiAPIKey		# check if API key was found
+unless merakiAPIKey		# API key must be provided, it is nil if not provided
 	multiLogger.write("Could not read API key", "fatal", true)
 	exit
 end
@@ -323,7 +325,7 @@ puts "\n\n"
 
 # process the new_list file
 multiLogger.write("Processing new_list file ...", "info", true)
-video_channels = readNewListFile(newListFile)
+video_channels = readcamNewListFile(camNewListFile)
 
 # assign cameraKey to each Camera object, they are the value of m3u8_filename key
 if video_channels
@@ -348,7 +350,7 @@ if video_channels
 	# pp cameraList
 	writeCameraKeys(cameraKeysFile, wKeys)
 else
-	multiLogger.write("Could not find new_list file #{newListFile}", "error", true)
+	multiLogger.write("Could not find new_list file #{camNewListFile}", "error", true)
 end
 
 
@@ -412,6 +414,8 @@ threadArray = Array.new
 		ffmpegTmp = FFmpegWorker.new(cameraList[i], multiLogger)
 		ffmpegTmp.maxVideoLength = maxVideoLength
 		ffmpegTmp.videoOverlap = videoOverlap
+		ffmpegTmp.maxVideosPerCamera = maxVideosPerCamera
+
 		ffmpegWorkerArray << ffmpegTmp
 
 		threadArray << Thread.new(i) do |i|
