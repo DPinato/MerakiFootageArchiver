@@ -17,6 +17,7 @@ This is effectively an ffmpeg wrapper, allowing to store locally video from Cisc
 - All the cameras, from which footage will be recorded, have to be within the same dashboard organization
 - The cameras are only reached on the local LAN, not through the cloud
 - Preferrably, the cameras will be connected via Ethernet cable, not via WiFi
+- The --maxVideosPerCamera argument does not account for existing directories/files associated with a camera
 
 
 
