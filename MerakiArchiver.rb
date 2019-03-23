@@ -23,6 +23,7 @@ require 'logger'
 require 'csv'
 require 'date'
 require 'thread'
+require 'sys-proctable'		# this gem allows getting similar output as ps, but it is platform-agnostic
 
 require_relative 'Camera'
 require_relative 'FFmpegWorker'
@@ -43,6 +44,7 @@ BEGIN {
 
 END {
   puts "\n\nMerakiArchiver is ending..."
+	# `pkill ffmpeg`		# this kind of cleanup is a little dangerous
 }
 
 def readInputArguments(args)
@@ -229,7 +231,7 @@ multiLogger.write("Logger has started", "info", true)
 # read input arguments and store them to the appropriate variables
 multiLogger.write("Reading input arguments ...", "info", true)
 argsHash = readInputArguments(ARGV)
-multiLogger.write("#{argsHash.inspect}", "debug", true)
+multiLogger.write("#{argsHash.inspect}", "debug", false)
 
 orgID = argsHash["--orgID"]
 merakiAPIKey = readSingleLineFile(argsHash["--apiKeyFile"])   # key for API calls
@@ -338,7 +340,7 @@ if video_channels
 			if video_channels[j][:node_id] == cameraList[i].node_id
 				cameraList[i].cameraKey = video_channels[j][:m3u8_filename]
 				wKeys[cameraList[i].serial] = cameraList[i].cameraKey
-				multiLogger.write("#{cameraList[i].serial} - #{cameraList[i].cameraKey}", "debug", true)
+				multiLogger.write("#{cameraList[i].serial} - cameraKey: #{cameraList[i].cameraKey}", "debug", true)
 				next
 			end
 		end
@@ -352,6 +354,7 @@ if video_channels
 else
 	multiLogger.write("Could not find new_list file #{camNewListFile}", "error", true)
 end
+puts "\n\n"
 
 
 
@@ -364,14 +367,13 @@ if (cameraKeys == false)
 	multiLogger.write("Could not read cameraKeys, exiting ...", "fatal", true)
 	exit
 end
-pp cameraKeys
 
 
 
 # build the URL and set it to the appropriate Camera object
 (0...cameraList.size).each do |i|
 	cameraList[i].m3u8Url = buildM3U8Url(cameraList[i])
-	pp cameraList[i].m3u8Url
+	multiLogger.write("#{cameraList[i].serial} - #{cameraList[i].m3u8Url}", "debug", false)
 end
 puts "\n\n"
 
