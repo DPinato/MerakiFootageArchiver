@@ -4,7 +4,7 @@
 
 
 ## What is this?
-This is effectively an ffmpeg wrapper, allowing to store locally video from Cisco Meraki MV cameras in an mp4 format. Cisco Meraki MV cameras use [HTTP Live Streaming (HLS)](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) technology to store and playback video in a web browser.
+This is effectively an ffmpeg wrapper, allowing to store locally live video from Cisco Meraki MV cameras in an mp4 format. Cisco Meraki MV cameras use [HTTP Live Streaming (HLS)](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) technology to store and playback video in a web browser.
 
 
 ## How does this work?
