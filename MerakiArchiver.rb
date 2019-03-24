@@ -239,7 +239,10 @@ videoOutputDir = argsHash["--videoOutputDir"]
 maxVideoLength = argsHash["--maxVideoLength"].to_i
 videoOverlap = argsHash["--videoOverlap"].to_i
 cameraKeysFile = argsHash["--cameraKeysFile"]
-maxVideosPerCamera = argsHash["--maxVideosPerCamera"].to_i
+maxVideosPerCamera = 0
+if argsHash.hasKey?("--maxVideosPerCamera")
+	maxVideosPerCamera = argsHash["--maxVideosPerCamera"].to_i
+end
 
 # if a cameraKeysFile is given, ignore the camNewListFile
 unless cameraKeysFile
