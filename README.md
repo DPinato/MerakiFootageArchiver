@@ -51,10 +51,13 @@ The *cameraKeys* file can be provided directly with *--cameraKeysFile \<file\>*,
 
 ## Examples
 - Record live video feed of the cameras extracted from the new_list file provided. Video files will be 1 hour long, i.e. 3600 seconds, and the next video file begin 30 seconds before the previous one ends, i.e. the last and first 30 seconds of the previous and next video file, respectively, will be the same.
+
 `./MerakiArchiver.rb --orgID <ord_id> --apiKeyFile <api_key_file> --newListFile <new_list_file> --videoOutputDir <out_dir> --maxVideoLength 3600 --videoOverlap 30`
 
 - Same as above, however only 10 videos per camera will be stored. If the limit is reached, the oldest video file will be removed.
+
 `./MerakiArchiver.rb --orgID <ord_id> --apiKeyFile <api_key_file> --newListFile <new_list_file> --videoOutputDir <out_dir> --maxVideoLength 3600 --videoOverlap 30 --maxVideosPerCamera 10`
 
 - Same as second example. List of cameras to be monitored is in the `camera_keys_file` and there is no need to provide a new_file. Allows any camera in that organization, not only in the network, to be recorded.
+
 `./MerakiArchiver.rb --orgID <ord_id> --apiKeyFile <api_key_file> --cameraKeysFile <camera_keys_file> --videoOutputDir <out_dir> --maxVideoLength 3600 --videoOverlap 30 --maxVideosPerCamera 10`
