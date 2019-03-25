@@ -240,7 +240,7 @@ maxVideoLength = argsHash["--maxVideoLength"].to_i
 videoOverlap = argsHash["--videoOverlap"].to_i
 cameraKeysFile = argsHash["--cameraKeysFile"]
 maxVideosPerCamera = 0
-if argsHash.hasKey?("--maxVideosPerCamera")
+if argsHash.has_key?("--maxVideosPerCamera")
 	maxVideosPerCamera = argsHash["--maxVideosPerCamera"].to_i
 end
 
