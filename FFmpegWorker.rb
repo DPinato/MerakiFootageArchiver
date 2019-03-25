@@ -31,7 +31,7 @@ class FFmpegWorker
 
 	def genetateFFmpegCmd()
 		# the ffmpeg command is going to look something like
-		# # ffmpeg -loglevel -nostdin quiet -i <url> -bsf:a aac_adtstoasc -vcodec copy -c copy -crf 50 <output_file>
+		# ffmpeg -loglevel -nostdin quiet -i <url> -bsf:a aac_adtstoasc -vcodec copy -c copy -crf 50 <output_file>
 		currDateTime = DateTime.now.strftime("%Y%m%dT%H%M%S").to_s		# name each file according to the current DateTime
 		outFile = "#{@cameraObj.videoDir}/#{currDateTime}.mp4"
 		@storedVideoList[@countVideoNum % @maxVideosPerCamera] = outFile	# this should allow it to auto rollover

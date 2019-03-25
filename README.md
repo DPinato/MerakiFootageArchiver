@@ -5,31 +5,56 @@
 Cisco Meraki MV cameras use [HTTP Live Streaming (HLS)](https://en.wikipedia.org/wiki/HTTP_Live_Streaming) technology to playback video in a web browser.
 
 
-## What is this?
+## What is this and how does it work?
 This is effectively an ffmpeg wrapper, allowing to store locally live video from Cisco Meraki MV cameras in an mp4 format. Video files from each camera are stored in separate directories, following the naming scheme `"#{camera_name.gsub(' ', '_')}_#{camera_serial.gsub('-', '')}"`, with file names being the epoch time in which they were created, format `"%Y%m%dT%H%M%S"`.
 
+The Meraki dashboard API is used to pull the LAN IP address of the cameras in the organization. Reachability to the LAN IP address of the cameras, from the device where this is ran, is checked by running the curl command `curl --connect-timeout 2 --silent <LAN_IP>:443`. If the curl command does not succeed, the camera is deemed unreachable.
+
+FFmpegWorker takes care of running and timing the ffmpeg processes that retrieve the video files and store them locally.
+
+More information on the input arguments can be found in the [manpage](docs/manpage.txt).
 
 ## Getting started
 This script requires:
 - Meraki dashboard API key of an organization administrator, as the organization inventory has to be retrieved through the API
-- new_list or cameraKeys file. More details on how to get those below.
+- *new_list* or *cameraKeys* file. More details on how to get those below.
+- Ruby gems are listed in the Gemfile
+	- `bundle install` can be used to install the relevant gems. automatically however results may vary depending on the OS you are using.
+- I have developed and tested this only Mac OS (10.13+), Ubuntu 16.04+ and Raspberry Pi (4.14.71-v7+).
 
 
+## What is the *new_list* file and how is it relevant?
+The *new_list* file contains references to the .m3u8 file inside the camera, which is used by ffmpeg to retrieve the .ts video fragments in the camera, as soon as they are stored.
+To get the *new_list* file, navigate to the Camera > Cameras page with the Google Chrome Developer Tools open. Under the "Sources" section, there is a folder `<network_name>/n/<id>/manage/nodes` which will contain the *new_list* file. Store this file locally, and reference it using the argument *--newListFile \<file\>*.
+![Google Chrome developer tools](docs/ChromeConsole.png)
 
-## How does this work?
-- Details about the LAN IP addresses of the cameras are retrieved using the Cisco Meraki API.
--
-- A separate directory is created for each camera. The length of each video file can be configured as well as how long before the end of the previous recording, the next recording will start, to avoid the chance of not capturing video for a period of time.
+
+## What is the *cameraKeys* file and how is it relevant?
+If the *new_list* file is provided, via *--newListFile \<file\>*,  a *cameraKeys* file is automatically generated in the directory of the script, using the contents of the *new_list* file, which is essentially a CSV file used to build the .m3u8 url that is fed to ffmpeg, which for second generation cameras will look like this: `https://<camera-LAN-IP>.<cameramac>.devices.meraki.direct/hls/high/high<cameraKey>.m3u8`
+
+The *cameraKeys* file can be provided directly with *--cameraKeysFile \<file\>*, with a customised selection of cameras to monitor. The cameras referenced must be within the organization *orgID*, and the corresponding *cameraKey* value can be retrieved from the `m3u8_filename` key in each camera element of the `flux.actions.cameras.video_channels.reset` JSON array object inside the *new_file*. The *cameraKeys* file basically contains a list of:
+
+> CAMERA-SERIAL-1,\<cameraKey_1\>
+> CAMERA-SERIAL-2,\<cameraKey_2\>
+> CAMERA-SERIAL-3,\<cameraKey_3\>
 
 
 ## Limitations / Notes
 - All the cameras, from which footage will be recorded, have to be within the same dashboard organization
+	- If a cameraKeys file is not provided through *--cameraKeysFile*, cameras will have to be in the same network, as the *new_list* file will be processed
 - The cameras are only reached on the local LAN, not through the cloud
 - Preferrably, the cameras will be connected via Ethernet cable, not via WiFi
 - The --maxVideosPerCamera argument does not account for existing directories/files associated with a camera
+- I do not recommend running this while the video feed is open elsewhere, or using multiple instances of this script to monitor the same camera(s), as this will increase the load on the cameras and may cause unexpected outcomes
 
 
 
 ## Examples
+- Record live video feed of the cameras extracted from the new_list file provided. Video files will be 1 hour long, i.e. 3600 seconds, and the next video file begin 30 seconds before the previous one ends, i.e. the last and first 30 seconds of the previous and next video file, respectively, will be the same.
+`./MerakiArchiver.rb --orgID <ord_id> --apiKeyFile <api_key_file> --newListFile <new_list_file> --videoOutputDir <out_dir> --maxVideoLength 3600 --videoOverlap 30`
 
-./MerakiArchiver.rb \<orgID\>
+- Same as above, however only 10 videos per camera will be stored. If the limit is reached, the oldest video file will be removed.
+`./MerakiArchiver.rb --orgID <ord_id> --apiKeyFile <api_key_file> --newListFile <new_list_file> --videoOutputDir <out_dir> --maxVideoLength 3600 --videoOverlap 30 --maxVideosPerCamera 10`
+
+- Same as second example. List of cameras to be monitored is in the `camera_keys_file` and there is no need to provide a new_file. Allows any camera in that organization, not only in the network, to be recorded.
+`./MerakiArchiver.rb --orgID <ord_id> --apiKeyFile <api_key_file> --cameraKeysFile <camera_keys_file> --videoOutputDir <out_dir> --maxVideoLength 3600 --videoOverlap 30 --maxVideosPerCamera 10`
