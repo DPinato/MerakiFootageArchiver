@@ -1,9 +1,9 @@
 #!/usr/bin/ruby
-# input arguments:
+# available input arguments:
 # 	--orgID <id>: ID of the Meraki Dashboard organization where the cameras are
 # 	--apiKeyFile <file>: single-line file containing the API key for Meraki dashboard
 # 	--cameraKeysFile <file>: file containing keys for cameras
-# 	--camNewListFile <file>: file obtained from the Camera > Cameras page
+# 	--newListFile <file>: file obtained from the Camera > Cameras page
 # 	--videoOutputDir <directory>: directory where video files will be stored
 # 	--maxVideoLength <seconds>: maximum length of .mp4 video file
 # 	--videoOverlap <seconds>: how early the next ffmpeg will be started before the end of the previous
@@ -66,7 +66,7 @@ def readSingleLineFile(file)
 	File.read(file)
 end
 
-def readcamNewListFile(file)
+def readnewListFile(file)
 	# find "flux.actions.cameras.video_channels.reset" in the file given
 	# return the JSON array flux.actions.cameras.video_channels.reset
 	if !File.exist?(file) then return false end		# return false if file cannot be found
@@ -214,7 +214,7 @@ end
 
 # basic variables
 # cameraKeysFile = "cameraKeys"
-# camNewListFile = "new_list"
+# newListFile = "new_list"
 # videoOutputDir = "./"	# directory where video files will be stored and folders for the cameras will be created
 # orgID = 0    # ID of the organization to look cameras in
 
@@ -244,10 +244,10 @@ if argsHash.has_key?("--maxVideosPerCamera")
 	maxVideosPerCamera = argsHash["--maxVideosPerCamera"].to_i
 end
 
-# if a cameraKeysFile is given, ignore the camNewListFile
+# if a cameraKeysFile is given, ignore the newListFile
 unless cameraKeysFile
 	cameraKeysFile = "cameraKeys"		# assign default value
-	camNewListFile = argsHash["--camNewListFile"]
+	newListFile = argsHash["--newListFile"]
 end
 
 baseBody = {}
@@ -330,7 +330,7 @@ puts "\n\n"
 
 # process the new_list file
 multiLogger.write("Processing new_list file ...", "info", true)
-video_channels = readcamNewListFile(camNewListFile)
+video_channels = readnewListFile(newListFile)
 
 # assign cameraKey to each Camera object, they are the value of m3u8_filename key
 if video_channels
@@ -355,7 +355,7 @@ if video_channels
 	# pp cameraList
 	writeCameraKeys(cameraKeysFile, wKeys)
 else
-	multiLogger.write("Could not find new_list file #{camNewListFile}", "error", true)
+	multiLogger.write("Could not find new_list file #{newListFile}", "error", true)
 end
 puts "\n\n"
 
