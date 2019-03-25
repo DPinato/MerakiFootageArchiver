@@ -34,9 +34,9 @@ If the *new_list* file is provided, via *--newListFile \<file\>*,  a *cameraKeys
 
 The *cameraKeys* file can be provided directly with *--cameraKeysFile \<file\>*, with a customised selection of cameras to monitor. The cameras referenced must be within the organization *orgID*, and the corresponding *cameraKey* value can be retrieved from the `m3u8_filename` key in each camera element of the `flux.actions.cameras.video_channels.reset` JSON array object inside the *new_file*. The *cameraKeys* file basically contains a list of:
 
-> CAMERA-SERIAL-1,\<cameraKey_1\>
-> CAMERA-SERIAL-2,\<cameraKey_2\>
-> CAMERA-SERIAL-3,\<cameraKey_3\>
+> CAMERA-SERIAL-1,\<cameraKey_1\><br />
+> CAMERA-SERIAL-2,\<cameraKey_2\><br />
+> CAMERA-SERIAL-3,\<cameraKey_3\><br />
 
 
 ## Limitations / Notes
