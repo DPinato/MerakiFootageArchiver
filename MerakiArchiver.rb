@@ -32,6 +32,8 @@ require_relative 'MultiLogger'
 SUPPORT_720P = ["MV21", "MV71"]		# also, these are the gen 1 models
 SUPPORT_1080P = ["MV22", "MV72", "MV12"]		# these are the gen 2 models
 MANPAGE = "docs/manpage.txt"		# manual page for this
+ARG_LIST = ["--orgID", "--apiKeyFile", "--cameraKeysFile", "--newListFile", "--videoOutputDir",
+						"--maxVideoLength", "--videoOverlap", "--maxVideosPerCamera"]	# list of available arguments
 
 
 BEGIN {
@@ -167,7 +169,6 @@ end
 
 def readCameraKeys(file)
 	tmpHash = {}
-
 	if !File.exist?(file) then return false end		# return false if file cannot be found
 
 	CSV.foreach(file) do |row|
@@ -212,13 +213,6 @@ end
 
 
 
-# basic variables
-# cameraKeysFile = "cameraKeys"
-# newListFile = "new_list"
-# videoOutputDir = "./"	# directory where video files will be stored and folders for the cameras will be created
-# orgID = 0    # ID of the organization to look cameras in
-
-
 
 # create Logger object and start logging things
 baseLogFileDir = "./"	# directory where log files created by Logger will be stored
@@ -228,10 +222,16 @@ multiLogger = MultiLogger.new(loggerObj)
 multiLogger.write("Logger has started", "info", true)
 
 
-# read input arguments and store them to the appropriate variables
+# read input arguments, store them to the appropriate variables and do a couple of checks
 multiLogger.write("Reading input arguments ...", "info", true)
 argsHash = readInputArguments(ARGV)
 multiLogger.write("#{argsHash.inspect}", "debug", false)
+
+# check if any incorrect arguments are passed
+if !(argsHash.keys - ARG_LIST).empty?
+	multiLogger.write("Incorrect arguments, #{(argsHash.keys - ARG_LIST).to_s}", "error", true)
+	exit
+end
 
 orgID = argsHash["--orgID"]
 merakiAPIKey = readSingleLineFile(argsHash["--apiKeyFile"])   # key for API calls
@@ -239,10 +239,17 @@ videoOutputDir = argsHash["--videoOutputDir"]
 maxVideoLength = argsHash["--maxVideoLength"].to_i
 videoOverlap = argsHash["--videoOverlap"].to_i
 cameraKeysFile = argsHash["--cameraKeysFile"]
+newListFile = nil
 maxVideosPerCamera = 0
 if argsHash.has_key?("--maxVideosPerCamera")
 	maxVideosPerCamera = argsHash["--maxVideosPerCamera"].to_i
 end
+
+if argsHash.has_key?("--newListFile") && argsHash.has_key?("--cameraKeysFile")
+	multiLogger.write("Do not use both --newListFile and --cameraKeysFile", "error", true)
+	exit
+end
+
 
 # if a cameraKeysFile is given, ignore the newListFile
 unless cameraKeysFile
@@ -282,7 +289,6 @@ cameraList = Array.new
 	cameraList << Camera.new(tmpList[i][:mac], tmpList[i][:serial], tmpList[i][:networkId], tmpList[i][:model], tmpList[i][:claimedAt], tmpList[i][:publicIp], tmpList[i][:name])
 	multiLogger.write("#{cameraList[i].inspect}", "debug", false)
 end
-# pp cameraList
 
 
 
@@ -328,34 +334,30 @@ puts "\n\n"
 
 
 
-# process the new_list file
-multiLogger.write("Processing new_list file ...", "info", true)
-video_channels = readnewListFile(newListFile)
+if newListFile != nil
+	# process the new_list file to derive cameraKeys
+	multiLogger.write("Processing new_list file ...", "info", true)
+	video_channels = readnewListFile(newListFile)
 
-# assign cameraKey to each Camera object, they are the value of m3u8_filename key
-if video_channels
-	wKeys = {}		# makes it very easy to pass it to writeCameraKeys
+	# assign cameraKey to each Camera object, they are the value of m3u8_filename key
+	if video_channels
+		wKeys = {}		# makes it very easy to pass it to writeCameraKeys
 
-	(0...cameraList.size).each do |i|
-		(0...video_channels.size).each do |j|
-			# TODO: there should not be a situation where a key is not found
-			# unless the camera in question is not in the network where new_list was taken
-			if video_channels[j][:node_id] == cameraList[i].node_id
-				cameraList[i].cameraKey = video_channels[j][:m3u8_filename]
-				wKeys[cameraList[i].serial] = cameraList[i].cameraKey
-				multiLogger.write("#{cameraList[i].serial} - cameraKey: #{cameraList[i].cameraKey}", "debug", true)
-				next
+		(0...cameraList.size).each do |i|
+			(0...video_channels.size).each do |j|
+				if video_channels[j][:node_id] == cameraList[i].node_id
+					wKeys[cameraList[i].serial] = video_channels[j][:m3u8_filename]
+					multiLogger.write("#{cameraList[i].inspect}", "debug", false)
+					next
+				end
 			end
 		end
 
-		multiLogger.write("#{cameraList[i].inspect}", "debug", false)	# not as pretty as pp
+		# write the values obtained to the cameraKeys file
+		writeCameraKeys(cameraKeysFile, wKeys)
+	else
+		multiLogger.write("Could not find new_list file #{newListFile}", "error", true)
 	end
-
-	# write the values obtained to the cameraKeys file, for caching
-	# pp cameraList
-	writeCameraKeys(cameraKeysFile, wKeys)
-else
-	multiLogger.write("Could not find new_list file #{newListFile}", "error", true)
 end
 puts "\n\n"
 
@@ -365,8 +367,10 @@ puts "\n\n"
 # https://<camera-IP>.<cameramac>.devices.meraki.direct/hls/<high>/<high><cameraKey>.m3u8
 # read <cameraKey> from the file of cameraKeys collected previously
 multiLogger.write("Reading cameraKeys file: #{cameraKeysFile}", "info", true)
-cameraKeys = readCameraKeys(cameraKeysFile)
-if (cameraKeys == false)
+cameraKeyList = readCameraKeys(cameraKeysFile)
+cameraList.reject!{|x| !cameraKeyList.keys.include?(x.serial)}	# remove cameras we do not have a cameraKey for
+cameraList.each {|x| x.cameraKey = cameraKeyList[x.serial]}		# assign cameraKeys
+unless cameraKeyList
 	multiLogger.write("Could not read cameraKeys, exiting ...", "fatal", true)
 	exit
 end
@@ -376,13 +380,13 @@ end
 # build the URL and set it to the appropriate Camera object
 (0...cameraList.size).each do |i|
 	cameraList[i].m3u8Url = buildM3U8Url(cameraList[i])
-	multiLogger.write("#{cameraList[i].serial} - #{cameraList[i].m3u8Url}", "debug", false)
+	multiLogger.write("#{cameraList[i].serial} - #{cameraList[i].m3u8Url}", "debug", true)
 end
 puts "\n\n"
 
 
 
-# create directories to store video
+# create directories to store video files
 multiLogger.write("Creating directories to store video files ...", "info", true)
 unless (Dir.exist?(videoOutputDir))
 	Dir.mkdir(videoOutputDir)

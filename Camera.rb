@@ -12,9 +12,9 @@ class Camera
   attr_accessor :lat, :lng, :address, :notes, :lanIp, :tags		# from the devices API call
 
 	attr_accessor :apiVideoLink		# video link obtained from API call videoLink
-	attr_accessor :node_id		# obtained from the video link API call
+	attr_accessor :node_id				# obtained from the video link API call
 
 	attr_accessor :isReachable, :isLocal
-	attr_accessor :m3u8Url, :cameraKey
+	attr_accessor :cameraKey, :m3u8Url
 	attr_accessor :videoDir		# directory where video files are stored
 end
