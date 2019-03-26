@@ -1,3 +1,4 @@
+
 ## DISCLAIMER
 - This project was not built by Cisco Meraki and it is not in any way affiliated with Cisco Meraki
 - I have done my best to test this code as much as possible, however use at your own risk
@@ -17,11 +18,21 @@ More information on the input arguments can be found in the [manpage](docs/manpa
 ## Getting started
 This script requires:
 - Meraki dashboard API key of an organization administrator, as the organization inventory has to be retrieved through the API
-- *new_list* or *cameraKeys* file. More details on how to get those below.
+- *new_list* or *cameraKeys* file (more details on how to get those below)
 - Ruby gems are listed in the Gemfile
-	- `bundle install` can be used to install the relevant gems. automatically however results may vary depending on the OS you are using.
-- I have developed and tested this only Mac OS (10.13+), Ubuntu 16.04+ and Raspberry Pi (4.14.71-v7+).
+	- `bundle install` can be used to install the relevant gems. automatically however results may vary depending on the OS you are using
+- Ffmpeg, latest version for the platforms mentioned below should work
 
+I have developed and tested this on:
+	- Mac OS (10.13+)
+		- `ffmpeg version 4.1 Copyright (c) 2000-2018 the FFmpeg developers`
+			`built with Apple LLVM version 10.0.0 (clang-1000.11.45.5)`
+	- Ubuntu 16.04+
+		- 	`ffmpeg version 2.8.15-0ubuntu0.16.04.1 Copyright (c) 2000-2018 the FFmpeg developers`
+			`built with gcc 5.4.0 (Ubuntu 5.4.0-6ubuntu1~16.04.10) 20160609`
+	- Raspberry Pi (4.14.71-v7+).
+		- `ffmpeg version 3.2.10-1~deb9u1+rpt2 Copyright (c) 2000-2018 the FFmpeg developers`
+			`built with gcc 6.3.0 (Raspbian 6.3.0-18+rpi1+deb9u1) 20170516`
 
 ## What is the *new_list* file and how is it relevant?
 The *new_list* file contains references to the .m3u8 file inside the camera, which is used by ffmpeg to retrieve the .ts video fragments in the camera, as soon as they are stored.
