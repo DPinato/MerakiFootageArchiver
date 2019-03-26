@@ -3,3 +3,4 @@ cameraKeys
 new_list
 *.log
 *.lock
+.DS_Store
