@@ -46,6 +46,7 @@ The *cameraKeys* file can be provided directly with *--cameraKeysFile \<file\>*,
 - Preferrably, the cameras will be connected via Ethernet cable, not via WiFi
 - The *--maxVideosPerCamera* argument does not account for existing directories/files associated with a camera
 - I do not recommend running this while the video feed is open elsewhere, or using multiple instances of this script to monitor the same camera(s), as this will increase the load on the cameras and may cause unexpected outcomes
+- There is the chance that ffmpeg processes will keep going after the MerakiFootageArchiver process is terminated
 
 
 
