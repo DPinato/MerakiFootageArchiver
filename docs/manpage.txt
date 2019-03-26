@@ -1,6 +1,19 @@
+MerakiFootageArchiver - Record live footage of Meraki cameras to local storage
+
+Description:
+
+This is effectively an ffmpeg wrapper, allowing to store locally live video from Cisco Meraki MV cameras in an mp4 format. Video files from each camera are stored in separate directories, following the naming scheme "#{camera_name.gsub(' ', '_')}_#{camera_serial.gsub('-', '')}", with file names being the epoch time in which they were created, format "%Y%m%dT%H%M%S".
 
 
-Description
+Available input arguments:
 
+	--orgID <id>: orgID of the Meraki Dashboard organization where the cameras are claimed. Can be retrieved through the API
+	--apiKeyFile <file>: single-line file containing the API key for Meraki dashboard
+	--cameraKeysFile <file>: file containing keys for cameras
+	--newListFile <file>: file obtained from the Camera > Cameras page
+	--videoOutputDir <directory>: directory where video files will be stored
+	--maxVideoLength <seconds>: maximum length of each .mp4 video file generated
+	--videoOverlap <seconds>: how early the next ffmpeg will be started before the end of the previous
+	--maxVideosPerCamera <n>: maximum number of videos kept per camera
 
-Options
+./MerakiArchiver.rb [--newListFile <new_list_file> | --cameraKeysFile <camera_keys_file>] --orgID <ord_id> --apiKeyFile <api_key_file> --videoOutputDir <out_dir> --maxVideoLength 3600 --videoOverlap 30
