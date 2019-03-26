@@ -30,7 +30,7 @@ To get the *new_list* file, navigate to the Camera > Cameras page with the Googl
 
 
 ## What is the *cameraKeys* file and how is it relevant?
-If the *new_list* file is provided, via *--newListFile \<file\>*,  a *cameraKeys* file is automatically generated in the directory of the script, using the contents of the *new_list* file, which is essentially a CSV file used to build the .m3u8 url that is fed to ffmpeg, which for second generation cameras will look like this: `https://<camera-LAN-IP>.<cameramac>.devices.meraki.direct/hls/high/high<cameraKey>.m3u8`
+If the *new_list* file is provided, via *--newListFile \<file\>*,  a *cameraKeys* file is automatically generated in the directory of the script, using the contents of the *new_list* file, which is essentially a CSV file used to build the .m3u8 URL that is fed to ffmpeg, which for second generation cameras will look like this: `https://<camera-LAN-IP>.<cameramac>.devices.meraki.direct/hls/high/high<cameraKey>.m3u8`
 
 The *cameraKeys* file can be provided directly with *--cameraKeysFile \<file\>*, with a customised selection of cameras to monitor. The cameras referenced must be within the organization *orgID*, and the corresponding *cameraKey* value can be retrieved from the `m3u8_filename` key in each camera element of the `flux.actions.cameras.video_channels.reset` JSON array object inside the *new_file*. The *cameraKeys* file basically contains a list of:
 
