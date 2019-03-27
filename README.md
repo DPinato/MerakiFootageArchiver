@@ -19,8 +19,8 @@ More information on the input arguments can be found in the [manpage](docs/manpa
 This script requires:
 - Meraki dashboard API key of an organization administrator, as the organization inventory has to be retrieved through the API
 - *new_list* or *cameraKeys* file (more details on how to get those below)
-- Ruby gems are listed in the Gemfile
-	- `bundle install` can be used to install the relevant gems. automatically however results may vary depending on the OS you are using
+- Ruby version 2.3+ (for the respective platforms referenced below) and gems are listed in the Gemfile
+	- `bundle install` can be used to install the relevant gems automatically. Results may vary depending on the OS you are using
 - Ffmpeg, latest version for the platforms mentioned below should work
 
 I have developed and tested this on:
